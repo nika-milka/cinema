@@ -1,0 +1,19 @@
+{
+  "name": "cinema-management",
+  "version": "1.0.0",
+  "description": "Приложение для управления кинотеатрами",
+  "main": "server/server1.js",
+  "scripts": {
+    "start": "node server/server1.js",
+    "server": "nodemon server/server1.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
