@@ -55,8 +55,7 @@ function displayCinemas(cinemas) {
 
 // Функция обработки выбора кинотеатра
 function selectCinema(cinemaId) {
-    alert(`Выбран кинотеатр с ID: ${cinemaId}`);
-    // Здесь можно добавить перенаправление или другие действия
+    window.location.href = `session.html?cinemaId=${cinemaId}`;
 }
 
 // Функция для отображения ошибки
