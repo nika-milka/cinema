@@ -1,45 +1,86 @@
-exports.updateHall = async (req, res) => {
+const Hall = require('../models/hall.model');
+
+// Получение всех залов
+exports.getAllHalls = async (req, res) => {
   try {
-    console.log('Updating hall with data:', req.body); // Логирование
-    
-    const updatedHall = await Hall.update(req.params.id, req.body);
-    if (!updatedHall) {
-      console.log('Hall not found for update:', req.params.id);
-      return res.status(404).json({ error: 'Зал не найден' });
-    }
-    
-    console.log('Successfully updated hall:', updatedHall);
-    res.json(updatedHall);
+    const halls = await Hall.findAll();
+    res.json(halls);
   } catch (error) {
-    console.error('Update hall error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      details: 'Ошибка при обновлении зала' 
-    });
+    res.status(500).json({ error: error.message });
   }
 };
 
-exports.deleteHall = async (req, res) => {
+// Получение зала по ID
+exports.getHallById = async (req, res) => {
   try {
-    console.log('Deleting hall with id:', req.params.id); // Логирование
-    
-    const deletedHall = await Hall.delete(req.params.id);
-    if (!deletedHall) {
-      console.log('Hall not found for deletion:', req.params.id);
+    const hall = await Hall.findById(req.params.id);
+    if (!hall) {
       return res.status(404).json({ error: 'Зал не найден' });
     }
-    
-    console.log('Successfully deleted hall:', deletedHall);
-    res.json({ 
-      success: true,
-      message: 'Зал успешно удален',
-      data: deletedHall
-    });
+    res.json(hall);
   } catch (error) {
-    console.error('Delete hall error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      details: 'Ошибка при удалении зала' 
-    });
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Создание зала
+exports.createHall = async (req, res) => {
+  try {
+    const { cinema_id, hall_code, type_id, seats } = req.body;
+
+    if (!cinema_id || !hall_code || !type_id || !seats) {
+      return res.status(400).json({ error: 'Все поля обязательны' });
+    }
+
+    const newHall = await Hall.create({ cinema_id, hall_code, type_id, seats });
+    res.status(201).json(newHall);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Обновление зала
+exports.updateHall = async (req, res) => {
+  try {
+    const updatedHall = await Hall.update(req.params.id, req.body);
+    if (!updatedHall) {
+      return res.status(404).json({ error: 'Зал не найден' });
+    }
+    res.json(updatedHall);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Удаление зала
+exports.deleteHall = async (req, res) => {
+  try {
+    const isDeleted = await Hall.delete(req.params.id);
+    if (!isDeleted) {
+      return res.status(404).json({ error: 'Зал не найден' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Получение кинотеатров для select
+exports.getCinemasForSelect = async (req, res) => {
+  try {
+    const cinemas = await Hall.getCinemasForSelect();
+    res.json(cinemas);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Получение типов залов для select
+exports.getHallTypesForSelect = async (req, res) => {
+  try {
+    const types = await Hall.getHallTypesForSelect();
+    res.json(types);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };

@@ -6,7 +6,7 @@ const hallTypeRoutes = require('./routes/hallTypes');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
 // Enhanced CORS configuration
 app.use(cors({
