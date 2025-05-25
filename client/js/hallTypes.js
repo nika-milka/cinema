@@ -1,124 +1,206 @@
-let currentHallTypeId = null;
-
-async function loadHallTypes() {
-  try {
-    const hallTypes = await Api.getHallTypes();
-    renderHallTypes(hallTypes);
-  } catch (error) {
-    console.error('Ошибка при загрузке типов залов:', error);
-    alert(`Ошибка при загрузке типов залов: ${error.message}`);
-  }
-}
-
-function renderHallTypes(hallTypes) {
-  const table = document.querySelector('#hallTypesTable');
-  // Очищаем только тело таблицы, оставляя заголовки
-  const tbody = table.querySelector('tbody');
-  if (tbody) {
-    tbody.remove();
-  }
-  
-  const newTbody = document.createElement('tbody');
-  hallTypes.forEach(type => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${type.type_name}</td>
-      <td class="actions">
-        <button class="btn edit-hall-type" data-id="${type.type_id}">Изменить</button>
-        <button class="btn btn-danger delete-hall-type" data-id="${type.type_id}">Удалить</button>
-      </td>
-    `;
-    newTbody.appendChild(tr);
-  });
-  
-  table.appendChild(newTbody);
-  
-  // Навешиваем обработчики событий
-  document.querySelectorAll('.edit-hall-type').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const id = parseInt(e.target.getAttribute('data-id'));
-      editHallType(id);
-    });
-  });
-  
-  document.querySelectorAll('.delete-hall-type').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const id = parseInt(e.target.getAttribute('data-id'));
-      showConfirmModal('Вы уверены, что хотите удалить этот тип зала?', id, deleteHallType);
-    });
-  });
-}
-
-async function editHallType(id) {
-  try {
-    const hallType = await Api.getHallTypeById(id);
-    if (!hallType) {
-      alert('Тип зала не найден');
-      return;
-    }
+document.addEventListener('DOMContentLoaded', function() {
+    // Элементы DOM
+    const hallTypeModal = document.getElementById('hallTypeModal');
+    const addHallTypeBtn = document.getElementById('addHallTypeBtn');
+    const closeBtns = document.querySelectorAll('.close');
+    const hallTypeForm = document.getElementById('hallTypeForm');
+    const hallTypesTable = document.getElementById('hallTypesTable').querySelector('tbody');
     
-    currentHallTypeId = id;
-    document.getElementById('hallTypeModalTitle').textContent = 'Изменить тип зала';
-    document.getElementById('hallTypeName').value = hallType.type_name;
-    document.getElementById('hallTypeModal').style.display = 'block';
-  } catch (error) {
-    console.error('Ошибка при редактировании типа зала:', error);
-    alert(`Ошибка при загрузке данных типа зала: ${error.message}`);
-  }
-}
+    // Текущий редактируемый тип зала
+    let currentHallTypeId = null;
 
-async function saveHallType(event) {
-  event.preventDefault();
-  
-  const hallTypeData = {
-    type_name: document.getElementById('hallTypeName').value.trim()
-  };
-  
-  if (!hallTypeData.type_name) {
-    alert('Пожалуйста, введите название типа зала');
-    return;
-  }
-  
-  try {
-    if (currentHallTypeId) {
-      await Api.updateHallType(currentHallTypeId, hallTypeData);
-      alert('Тип зала успешно обновлен!');
-    } else {
-      await Api.createHallType(hallTypeData);
-      alert('Тип зала успешно создан!');
+    // Инициализация
+    loadHallTypes();
+    setupEventListeners();
+
+    function setupEventListeners() {
+        // Кнопка добавления типа зала
+        if (addHallTypeBtn) {
+            addHallTypeBtn.addEventListener('click', function() {
+                currentHallTypeId = null;
+                document.getElementById('hallTypeModalTitle').textContent = 'Добавить тип зала';
+                document.getElementById('hallTypeId').value = '';
+                hallTypeForm.reset();
+                hallTypeModal.style.display = 'block';
+            });
+        }
+
+        // Обработка формы типа зала
+        if (hallTypeForm) {
+            hallTypeForm.addEventListener('submit', handleHallTypeSubmit);
+        }
+
+        // Поиск по типам залов
+        const hallTypeSearch = document.getElementById('hallTypeSearch');
+        if (hallTypeSearch) {
+            hallTypeSearch.addEventListener('input', function() {
+                filterHallTypes(this.value.toLowerCase());
+            });
+        }
     }
-    
-    await loadHallTypes();
-    closeAllModals();
-  } catch (error) {
-    console.error('Ошибка при сохранении типа зала:', error);
-    alert(`Ошибка при сохранении типа зала: ${error.message}`);
-  }
-}
 
-async function deleteHallType(id) {
-  try {
-    await Api.deleteHallType(id);
-    alert('Тип зала успешно удален!');
-    await loadHallTypes();
-    closeAllModals();
-  } catch (error) {
-    console.error('Ошибка при удалении типа зала:', error);
-    alert(`Ошибка при удалении типа зала: ${error.message}`);
-  }
-}
+    async function loadHallTypes() {
+        try {
+            const response = await fetch('http://localhost:3000/api/hall-types');
+            if (!response.ok) throw new Error('Ошибка загрузки типов залов');
+            
+            const types = await response.json();
+            renderHallTypes(types);
+        } catch (error) {
+            console.error('Ошибка:', error);
+            alert('Не удалось загрузить список типов залов');
+        }
+    }
 
-// Инициализация
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('addHallTypeBtn').addEventListener('click', () => {
-    currentHallTypeId = null;
-    document.getElementById('hallTypeModalTitle').textContent = 'Добавить тип зала';
-    document.getElementById('hallTypeName').value = '';
-    document.getElementById('hallTypeModal').style.display = 'block';
-  });
+    function renderHallTypes(types) {
+        hallTypesTable.innerHTML = '';
+        
+        types.forEach(type => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${type.type_name}</td>
+                <td class="actions">
+                    <button class="btn edit-hall-type" data-id="${type.type_id}">Изменить</button>
+                    <button class="btn btn-danger delete-hall-type" data-id="${type.type_id}">Удалить</button>
+                </td>
+            `;
+            hallTypesTable.appendChild(tr);
+        });
 
-  document.getElementById('hallTypeForm').addEventListener('submit', saveHallType);
-  
-  // Инициализация загрузки данных
-  loadHallTypes();
+        // Навешиваем обработчики для кнопок
+        document.querySelectorAll('.edit-hall-type').forEach(btn => {
+            btn.addEventListener('click', function() {
+                editHallType(this.dataset.id);
+            });
+        });
+
+        document.querySelectorAll('.delete-hall-type').forEach(btn => {
+            btn.addEventListener('click', function() {
+                showConfirmModal(
+                    'Вы уверены, что хотите удалить этот тип зала?',
+                    this.dataset.id,
+                    deleteHallType
+                );
+            });
+        });
+    }
+
+    function filterHallTypes(searchTerm) {
+        const rows = hallTypesTable.querySelectorAll('tr');
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(searchTerm) ? '' : 'none';
+        });
+    }
+
+    async function editHallType(typeId) {
+        try {
+            const response = await fetch(`http://localhost:3000/api/hall-types/${typeId}`);
+            if (!response.ok) throw new Error('Ошибка загрузки данных типа зала');
+            
+            const type = await response.json();
+            if (!type) throw new Error('Тип зала не найден');
+
+            currentHallTypeId = typeId;
+            document.getElementById('hallTypeModalTitle').textContent = 'Изменить тип зала';
+            document.getElementById('hallTypeId').value = typeId;
+            document.getElementById('hallTypeName').value = type.type_name;
+
+            hallTypeModal.style.display = 'block';
+        } catch (error) {
+            console.error('Ошибка:', error);
+            alert('Не удалось загрузить данные для редактирования');
+        }
+    }
+
+    async function handleHallTypeSubmit(e) {
+        e.preventDefault();
+        
+        try {
+            const formData = {
+                type_name: document.getElementById('hallTypeName').value.trim()
+            };
+
+            // Валидация
+            if (!formData.type_name) {
+                throw new Error('Введите название типа зала');
+            }
+
+            const url = currentHallTypeId 
+                ? `http://localhost:3000/api/hall-types/${currentHallTypeId}`
+                : 'http://localhost:3000/api/hall-types';
+
+            const method = currentHallTypeId ? 'PUT' : 'POST';
+
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Ошибка сервера');
+            }
+
+            alert(`Тип зала успешно ${currentHallTypeId ? 'обновлён' : 'добавлен'}!`);
+            hallTypeModal.style.display = 'none';
+            loadHallTypes();
+        } catch (error) {
+            console.error('Ошибка:', error);
+            alert('Ошибка при сохранении: ' + error.message);
+        }
+    }
+
+    async function deleteHallType(typeId) {
+        try {
+            const response = await fetch(`http://localhost:3000/api/hall-types/${typeId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Ошибка сервера');
+            }
+
+            alert('Тип зала успешно удалён!');
+            return true;
+        } catch (error) {
+            console.error('Ошибка:', error);
+            throw error;
+        }
+    }
+
+    // Общая функция для показа модального окна подтверждения
+    function showConfirmModal(message, id, callback) {
+        const confirmModal = document.getElementById('confirmModal');
+        document.getElementById('confirmMessage').textContent = message;
+        
+        const confirmDelete = document.getElementById('confirmDelete');
+        const cancelDelete = document.getElementById('cancelDelete');
+
+        // Удаляем старые обработчики
+        confirmDelete.onclick = null;
+        cancelDelete.onclick = null;
+
+        // Добавляем новые
+        confirmDelete.onclick = async function() {
+            try {
+                await callback(id);
+                confirmModal.style.display = 'none';
+                loadHallTypes();
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Ошибка при удалении');
+            }
+        };
+
+        cancelDelete.onclick = function() {
+            confirmModal.style.display = 'none';
+        };
+
+        confirmModal.style.display = 'block';
+    }
 });

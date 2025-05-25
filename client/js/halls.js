@@ -1,183 +1,292 @@
-let currentHallId = null;
+// client/js/halls.js
+document.addEventListener('DOMContentLoaded', function() {
+    // Элементы DOM
+    const hallModal = document.getElementById('hallModal');
+    const addHallBtn = document.getElementById('addHallBtn');
+    const closeBtns = document.querySelectorAll('.close');
+    const hallForm = document.getElementById('hallForm');
+    const hallCinemaSelect = document.getElementById('hallCinemaId');
+    const hallTypeSelect = document.getElementById('hallTypeId');
+    const hallsTable = document.getElementById('hallsTable').querySelector('tbody');
 
-async function loadHalls() {
-  try {
-    const halls = await Api.getHalls();
-    renderHalls(halls);
-  } catch (error) {
-    console.error('Ошибка при загрузке залов:', error);
-    alert(`Ошибка при загрузке залов: ${error.message}`);
-  }
-}
+    // Текущий редактируемый зал
+    let currentHallId = null;
 
-function renderHalls(halls) {
-  const table = document.querySelector('#hallsTable');
-  const tbody = table.querySelector('tbody');
-  if (tbody) {
-    tbody.remove();
-  }
-  
-  const newTbody = document.createElement('tbody');
-  halls.forEach(hall => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${hall.cinema_name || 'Неизвестно'}</td>
-      <td>${hall.hall_code}</td>
-      <td>${hall.type_name || 'Неизвестно'}</td>
-      <td>${hall.seats}</td>
-      <td class="actions">
-        <button class="btn edit-hall" data-id="${hall.hall_id}">Изменить</button>
-        <button class="btn btn-danger delete-hall" data-id="${hall.hall_id}">Удалить</button>
-      </td>
-    `;
-    newTbody.appendChild(tr);
-  });
-  
-  table.appendChild(newTbody);
-  
-  document.querySelectorAll('.edit-hall').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const id = parseInt(e.target.getAttribute('data-id'));
-      editHall(id);
-    });
-  });
-  
-  document.querySelectorAll('.delete-hall').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const id = parseInt(e.target.getAttribute('data-id'));
-      showConfirmModal('Вы уверены, что хотите удалить этот зал?', id, deleteHall);
-    });
-  });
-}
+    // Инициализация
+    initTabs();
+    loadHalls();
+    setupEventListeners();
 
-async function editHall(id) {
-  try {
-    const [hall, cinemas, hallTypes] = await Promise.all([
-      Api.getHallById(id),
-      Api.getCinemasForSelect(),
-      Api.getHallTypesForSelect()
-    ]);
+    function initTabs() {
+        const tabs = document.querySelectorAll('.tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                tabs.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
 
-    if (!hall) {
-      alert('Зал не найден');
-      return;
+                const tabContents = document.querySelectorAll('.tab-content');
+                tabContents.forEach(content => content.classList.remove('active'));
+                document.getElementById(`${this.dataset.tab}-tab`).classList.add('active');
+            });
+        });
     }
 
-    currentHallId = id;
-    document.getElementById('hallModalTitle').textContent = 'Изменить зал';
-    document.getElementById('hallCode').value = hall.hall_code;
-    document.getElementById('hallSeats').value = hall.seats;
+    function setupEventListeners() {
+        // Кнопка добавления зала
+        if (addHallBtn) {
+            addHallBtn.addEventListener('click', function() {
+                currentHallId = null;
+                document.getElementById('hallModalTitle').textContent = 'Добавить зал';
+                document.getElementById('hallId').value = '';
+                hallForm.reset();
+                loadSelectData();
+                hallModal.style.display = 'block';
+            });
+        }
 
-    const cinemaSelect = document.getElementById('hallCinemaId');
-    cinemaSelect.innerHTML = '';
-    cinemas.forEach(cinema => {
-      const option = document.createElement('option');
-      option.value = cinema.cinema_id;
-      option.textContent = cinema.name;
-      option.selected = cinema.cinema_id === hall.cinema_id;
-      cinemaSelect.appendChild(option);
-    });
+        // Кнопки закрытия модальных окон
+        closeBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.modal').forEach(modal => {
+                    modal.style.display = 'none';
+                });
+            });
+        });
 
-    const typeSelect = document.getElementById('hallTypeId');
-    typeSelect.innerHTML = '';
-    hallTypes.forEach(type => {
-      const option = document.createElement('option');
-      option.value = type.type_id;
-      option.textContent = type.type_name;
-      option.selected = type.type_id === hall.type_id;
-      typeSelect.appendChild(option);
-    });
+        // Обработка формы зала
+        if (hallForm) {
+            hallForm.addEventListener('submit', handleHallSubmit);
+        }
 
-    document.getElementById('hallModal').style.display = 'block';
-  } catch (error) {
-    console.error('Ошибка при редактировании зала:', error);
-    alert(`Ошибка при загрузке данных зала: ${error.message}`);
-  }
-}
-
-async function saveHall(event) {
-  event.preventDefault();
-  
-  const hallData = {
-    cinema_id: parseInt(document.getElementById('hallCinemaId').value),
-    hall_code: document.getElementById('hallCode').value.trim(),
-    type_id: parseInt(document.getElementById('hallTypeId').value),
-    seats: parseInt(document.getElementById('hallSeats').value)
-  };
-  
-  if (!hallData.hall_code || isNaN(hallData.seats)) {
-    alert('Пожалуйста, заполните все поля корректно');
-    return;
-  }
-  
-  try {
-    if (currentHallId) {
-      await Api.updateHall(currentHallId, hallData);
-      alert('Зал успешно обновлен!');
-    } else {
-      await Api.createHall(hallData);
-      alert('Зал успешно создан!');
+        // Поиск по залам
+        const hallSearch = document.getElementById('hallSearch');
+        if (hallSearch) {
+            hallSearch.addEventListener('input', function() {
+                filterHalls(this.value.toLowerCase());
+            });
+        }
     }
-    
-    await loadHalls();
-    closeAllModals();
-  } catch (error) {
-    console.error('Ошибка при сохранении зала:', error);
-    alert(`Ошибка при сохранении зала: ${error.message}`);
-  }
-}
 
-async function deleteHall(id) {
-  try {
-    await Api.deleteHall(id);
-    alert('Зал успешно удален!');
-    await loadHalls();
-    closeAllModals();
-  } catch (error) {
-    console.error('Ошибка при удалении зала:', error);
-    alert(`Ошибка при удалении зала: ${error.message}`);
-  }
-}
-
-// Инициализация
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('addHallBtn').addEventListener('click', async () => {
-    try {
-      const [cinemas, hallTypes] = await Promise.all([
-        Api.getCinemasForSelect(),
-        Api.getHallTypesForSelect()
-      ]);
-
-      currentHallId = null;
-      document.getElementById('hallModalTitle').textContent = 'Добавить зал';
-      document.getElementById('hallCode').value = '';
-      document.getElementById('hallSeats').value = '100';
-
-      const cinemaSelect = document.getElementById('hallCinemaId');
-      cinemaSelect.innerHTML = '';
-      cinemas.forEach(cinema => {
-        const option = document.createElement('option');
-        option.value = cinema.cinema_id;
-        option.textContent = cinema.name;
-        cinemaSelect.appendChild(option);
-      });
-
-      const typeSelect = document.getElementById('hallTypeId');
-      typeSelect.innerHTML = '';
-      hallTypes.forEach(type => {
-        const option = document.createElement('option');
-        option.value = type.type_id;
-        option.textContent = type.type_name;
-        typeSelect.appendChild(option);
-      });
-
-      document.getElementById('hallModal').style.display = 'block';
-    } catch (error) {
-      console.error('Ошибка при открытии формы зала:', error);
-      alert(`Ошибка при загрузке данных для формы: ${error.message}`);
+    async function loadHalls() {
+        try {
+            const response = await fetch('http://localhost:3000/api/halls');
+            if (!response.ok) throw new Error('Ошибка загрузки залов');
+            
+            const halls = await response.json();
+            renderHalls(halls);
+        } catch (error) {
+            console.error('Ошибка:', error);
+            alert('Не удалось загрузить список залов');
+        }
     }
-  });
 
-  document.getElementById('hallForm').addEventListener('submit', saveHall);
-  loadHalls();
+    function renderHalls(halls) {
+        hallsTable.innerHTML = '';
+        
+        halls.forEach(hall => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${hall.cinema_name || 'Не указано'}</td>
+                <td>${hall.hall_code}</td>
+                <td>${hall.type_name || 'Не указано'}</td>
+                <td>${hall.seats}</td>
+                <td class="actions">
+                    <button class="btn edit-hall" data-id="${hall.hall_id}">Изменить</button>
+                    <button class="btn btn-danger delete-hall" data-id="${hall.hall_id}">Удалить</button>
+                </td>
+            `;
+            hallsTable.appendChild(tr);
+        });
+
+        // Навешиваем обработчики для кнопок
+        document.querySelectorAll('.edit-hall').forEach(btn => {
+            btn.addEventListener('click', function() {
+                editHall(this.dataset.id);
+            });
+        });
+
+        document.querySelectorAll('.delete-hall').forEach(btn => {
+            btn.addEventListener('click', function() {
+                showConfirmModal(
+                    'Вы уверены, что хотите удалить этот зал?',
+                    this.dataset.id,
+                    deleteHall
+                );
+            });
+        });
+    }
+
+    function filterHalls(searchTerm) {
+        const rows = hallsTable.querySelectorAll('tr');
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(searchTerm) ? '' : 'none';
+        });
+    }
+
+    async function loadSelectData() {
+        try {
+            const [cinemasRes, typesRes] = await Promise.all([
+                fetch('http://localhost:3000/api/halls/select/cinemas'),
+                fetch('http://localhost:3000/api/halls/select/types')
+            ]);
+
+            if (!cinemasRes.ok || !typesRes.ok) {
+                throw new Error('Ошибка загрузки данных');
+            }
+
+            const [cinemas, types] = await Promise.all([
+                cinemasRes.json(),
+                typesRes.json()
+            ]);
+
+            fillSelect(hallCinemaSelect, cinemas);
+            fillSelect(hallTypeSelect, types);
+        } catch (error) {
+            console.error('Ошибка загрузки данных:', error);
+            alert('Не удалось загрузить данные для формы');
+        }
+    }
+
+    function fillSelect(selectElement, items) {
+        selectElement.innerHTML = '';
+        
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = '-- Выберите --';
+        selectElement.appendChild(defaultOption);
+
+        items.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.id;
+            option.textContent = item.label || item.name || item.type_name;
+            selectElement.appendChild(option);
+        });
+    }
+
+    async function editHall(hallId) {
+        try {
+            const response = await fetch(`http://localhost:3000/api/halls/${hallId}`);
+            if (!response.ok) throw new Error('Ошибка загрузки данных зала');
+            
+            const hall = await response.json();
+            if (!hall) throw new Error('Зал не найден');
+
+            currentHallId = hallId;
+            document.getElementById('hallModalTitle').textContent = 'Изменить зал';
+            document.getElementById('hallId').value = hallId;
+            document.getElementById('hallCode').value = hall.hall_code;
+            document.getElementById('hallSeats').value = hall.seats;
+
+            // Загружаем select'ы и устанавливаем значения
+            await loadSelectData();
+            document.getElementById('hallCinemaId').value = hall.cinema_id;
+            document.getElementById('hallTypeId').value = hall.type_id;
+
+            hallModal.style.display = 'block';
+        } catch (error) {
+            console.error('Ошибка:', error);
+            alert('Не удалось загрузить данные для редактирования');
+        }
+    }
+
+    async function handleHallSubmit(e) {
+        e.preventDefault();
+        
+        try {
+            const formData = {
+                cinema_id: parseInt(hallCinemaSelect.value),
+                hall_code: document.getElementById('hallCode').value.trim(),
+                type_id: parseInt(hallTypeSelect.value),
+                seats: parseInt(document.getElementById('hallSeats').value)
+            };
+
+            // Валидация
+            if (!formData.cinema_id || !formData.hall_code || !formData.type_id || isNaN(formData.seats)) {
+                throw new Error('Заполните все поля корректно');
+            }
+
+            const url = currentHallId 
+                ? `http://localhost:3000/api/halls/${currentHallId}`
+                : 'http://localhost:3000/api/halls';
+
+            const method = currentHallId ? 'PUT' : 'POST';
+
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Ошибка сервера');
+            }
+
+            alert(`Зал успешно ${currentHallId ? 'обновлён' : 'добавлен'}!`);
+            hallModal.style.display = 'none';
+            loadHalls();
+        } catch (error) {
+            console.error('Ошибка:', error);
+            alert(`Ошибка: ${error.message}`);
+        }
+    }
+
+    function showConfirmModal(message, id, callback) {
+        const confirmModal = document.getElementById('confirmModal');
+        document.getElementById('confirmMessage').textContent = message;
+        
+        const confirmDelete = document.getElementById('confirmDelete');
+        const cancelDelete = document.getElementById('cancelDelete');
+
+        // Удаляем старые обработчики
+        confirmDelete.onclick = null;
+        cancelDelete.onclick = null;
+
+        // Добавляем новые
+        confirmDelete.onclick = async function() {
+            try {
+                await callback(id);
+                confirmModal.style.display = 'none';
+                loadHalls();
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Ошибка при удалении');
+            }
+        };
+
+        cancelDelete.onclick = function() {
+            confirmModal.style.display = 'none';
+        };
+
+        confirmModal.style.display = 'block';
+    }
+
+    async function deleteHall(hallId) {
+        try {
+            const response = await fetch(`http://localhost:3000/api/halls/${hallId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Ошибка сервера');
+            }
+
+            alert('Зал успешно удалён!');
+            return true;
+        } catch (error) {
+            console.error('Ошибка:', error);
+            throw error;
+        }
+    }
+
+    // Закрытие модальных окон при клике вне их
+    window.addEventListener('click', function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
+        }
+    });
 });
