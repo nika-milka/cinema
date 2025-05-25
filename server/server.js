@@ -1,47 +1,43 @@
+require('dotenv').config();
 const express = require('express');
+const { Pool } = require('pg');
 const cors = require('cors');
-const cinemaRoutes = require('./routes/cinemas');
-const hallRoutes = require('./routes/halls');
-const hallTypeRoutes = require('./routes/hallTypes');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = process.env.SERVER_PORT || 3000;
 
-// Enhanced CORS configuration
-app.use(cors({
-  origin: ['http://localhost:5500', 'http://127.0.0.1:5500'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type']
-}));
+// Настройка подключения к PostgreSQL
+const pool = new Pool({
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT,
+});
 
+// Middleware
+app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '../client')));
 
-// Logging middleware
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
+// API endpoint для получения кинотеатров
+app.get('/api/cinemas', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT cinema_id, name, address, phone FROM cinemas');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching cinemas:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
-// API Routes
-app.use('/api/cinemas', cinemaRoutes);
-app.use('/api/halls', hallRoutes);
-app.use('/api/hall-types', hallTypeRoutes);
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+// Serve cinema.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../client/cinema.html'));
 });
 
-// Serve static files in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '..', 'client')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, '..', 'client', 'cinema-add.html'));
-  });
-}
-
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Запуск сервера
+app.listen(port, () => {
+    console.log(`Server running on http://localhost:${port}`);
 });
